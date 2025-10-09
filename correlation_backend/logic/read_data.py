@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import calc_analysis
 
 
 def read_parquet_files(data_folder='../data/BTCUSDT-PERP.BINANCE_LUNAR'):
@@ -12,15 +13,6 @@ def read_parquet_files(data_folder='../data/BTCUSDT-PERP.BINANCE_LUNAR'):
             data_frames[filename] = df
     return data_frames
 
-def plot_data(df):
-    columns_to_show = [
-        "instrument_id", "ts_event", "ts_init", "contributors_active", "contributors_created",
-        "interactions", "posts_active", "posts_created", "sentiment", "spam", "alt_rank",
-        "circulating_supply", "close", "galaxy_score", "high", "low", "market_cap",
-        "market_dominance", "open", "social_dominance", "volume_24h"
-    ]
-    print(df[columns_to_show].head())
+def get_specific_column(df: pd.DataFrame, col_index: int):
+    return df.iloc[:, col_index]
 
-dfs = read_parquet_files()
-for filename, df in dfs.items():
-    plot_data(df)
