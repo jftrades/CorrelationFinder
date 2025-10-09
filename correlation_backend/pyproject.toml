@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.118.2",
+    "matplotlib>=3.10.7",
+    "pandas>=2.3.3",
+    "pyarrow>=21.0.0",
+    "scipy>=1.16.2",
+]
