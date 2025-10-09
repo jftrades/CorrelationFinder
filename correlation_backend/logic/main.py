@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import calc_analysis
 from read_data import read_parquet_files, get_specific_column
-from calc_analysis import pearson_analysis, spearman_analysis
+from calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis, theilslopes_analysis
 
 
 SPECIFIC_COLUMN_INDEX_1 = 4
@@ -21,3 +21,12 @@ for filename, df in dfs.items():
 
     corr_coef_spearman, p_value_spearman = spearman_analysis(specific_column_1, specific_column_2)
     print(corr_coef_spearman, p_value_spearman)
+
+    corr_coef_kendalltau, p_value_kendalltau = kendalltau_analysis(specific_column_1, specific_column_2)
+    print(corr_coef_kendalltau, p_value_kendalltau)
+
+    regress_slope, regress_intercept, regress_rvalue, regress_pvalue, regress_stderr = linregress_analysis(specific_column_1, specific_column_2)
+    print(regress_slope, regress_intercept, regress_rvalue, regress_pvalue, regress_stderr)
+
+    theilregress_slope, theilregress_intercept, theilregress_low_slope, theilregress_high_slope = theilslopes_analysis(specific_column_1, specific_column_2)
+    print(theilregress_slope, theilregress_intercept, theilregress_low_slope, theilregress_high_slope)
