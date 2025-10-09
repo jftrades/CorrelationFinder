@@ -40,3 +40,11 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"pearson_values": pearson_values, "spearman_values": spearman_values, "kendalltau_values": kendalltau_values}
+
+@app.get("/files")
+async def get_files():
+    return {"files": list(dfs.keys())}
+
+@app.get("/analysismethods")
+async def get_analysis_methods():
+    return {"analysis_methods": ["pearson", "spearman", "kendalltau"]}
