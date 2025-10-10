@@ -1,32 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
 from correlation_backend.logic.calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis, theilslopes_analysis
 from fastapi.middleware.cors import CORSMiddleware
 from correlation_backend.logic.read_data import get_target_data_by_instrument, get_comparison_data_by_instrument, get_available_data_columns
-
-pearson_values = None
-
-SPECIFIC_COLUMN_INDEX_1 = 4
-SPECIFIC_COLUMN_INDEX_2 = 5
-
-# dfs = read_parquet_files()
-# filename, df = next(iter(dfs.items()))
-# specific_column_1 = get_specific_column(df, SPECIFIC_COLUMN_INDEX_1)
-# specific_column_2 = get_specific_column(df, SPECIFIC_COLUMN_INDEX_2)
-# print(specific_column_1)
-# print(specific_column_2)
-
-# pearson_values = pearson_analysis(specific_column_1, specific_column_2)
-# print(pearson_values)
-
-# spearman_values = spearman_analysis(specific_column_1, specific_column_2)
-# print(spearman_values)
-
-# kendalltau_values = kendalltau_analysis(specific_column_1, specific_column_2)
-# print(kendalltau_values)
 
 app = FastAPI()
 
@@ -79,6 +55,40 @@ async def analyze(request: FindFilePath):
     methods = request.methods
 
     target_column_content = get_target_data_by_instrument(target_instrument, target_data_type, target_data_column)
-    comparison_column_contents = get_comparison_data_by_instrument(comparison_instruments, comparison_data_types, comparison_data_columns)
+    comparison_data = get_comparison_data_by_instrument(comparison_instruments, comparison_data_types, comparison_data_columns)
+    print(comparison_data)
 
-    return {"target_column_content": target_column_content, "comparison_column_contents": comparison_column_contents}
+    results = {
+        "pearson_results": [],
+        "spearman_results": [],
+        "kendalltau_results": [],
+        "linregress_results": [],
+        "theilslopes_results": []
+    }
+    
+    for content in comparison_data:
+        if "pearson" in methods:
+            pearson_result = pearson_analysis(target_column_content, content)
+            results["pearson_results"].append(pearson_result)
+        if "spearman" in methods:
+            spearman_result = spearman_analysis(target_column_content, content)
+            results["spearman_results"].append(spearman_result)
+        if "kendalltau" in methods:
+            kendalltau_result = kendalltau_analysis(target_column_content, content)
+            results["kendalltau_results"].append(kendalltau_result)
+        if "linregress" in methods:
+            linregress_result = linregress_analysis(target_column_content, content)
+            results["linregress_results"].append(linregress_result)
+        if "theilslopes" in methods:
+            theilslopes_result = theilslopes_analysis(target_column_content, content)
+            results["theilslopes_results"].append(theilslopes_result)
+
+    return {
+        "target_column_content": target_column_content, 
+        "comparison_column_contents": comparison_data,
+        "pearson_results": results["pearson_results"],
+        "spearman_results": results["spearman_results"],
+        "kendalltau_results": results["kendalltau_results"],
+        "linregress_results": results["linregress_results"],
+        "theilslopes_results": results["theilslopes_results"]
+        }
