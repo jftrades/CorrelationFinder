@@ -37,14 +37,3 @@ def linregress_analysis(target_column_content: Series, comparison_column_content
     
     regress = linregress(data.iloc[:, 0], data.iloc[:, 1])
     return regress.slope, regress.intercept, regress.rvalue, regress.pvalue, regress.stderr
-
-def theilslopes_analysis(target_column_content: Series, comparison_column_contents: Series):
-    data = pd.concat([target_column_content, comparison_column_contents], axis=1, join='inner').dropna()
-    
-    if len(data) < 2:
-        return None, None, None, None
-    
-    theilregress = theilslopes(data.iloc[:, 0], data.iloc[:, 1])
-    return theilregress.slope, theilregress.intercept, theilregress.low_slope, theilregress.high_slope
-
-    

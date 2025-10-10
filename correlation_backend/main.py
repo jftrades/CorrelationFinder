@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from correlation_backend.logic.calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis, theilslopes_analysis
+from correlation_backend.logic.calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis
 from fastapi.middleware.cors import CORSMiddleware
 from correlation_backend.logic.read_data import get_target_data_by_instrument, get_comparison_data_by_instrument, get_available_data_columns
 
@@ -35,8 +35,8 @@ class FindFilePath(BaseModel):
 
 
 class FindAvailableDataColumns(BaseModel):
-    instrument: str
-    datatype: str
+    instrument: list[str]
+    datatype: list[str]
 
 @app.post("/available-data-columns")
 async def find_available_data_columns(body: FindAvailableDataColumns):
@@ -78,7 +78,7 @@ async def analyze(request: FindFilePath):
         if "linregress" in methods:
             linregress_result = linregress_analysis(target_column_content, content)
             results["linregress_results"].append(linregress_result)
-
+        
     return {
         "target_column_content": target_column_content, 
         "comparison_column_contents": comparison_data,

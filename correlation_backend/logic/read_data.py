@@ -5,33 +5,39 @@ import matplotlib.pyplot as plt
 
 data_folder = "data"
 
-def get_available_data_columns(instrument: str, data_type: str):
-    instrument = instrument.lower()
-    data_type = data_type.lower()
+def get_available_data_columns(instruments: list[str], data_types: list[str]):
+    data_column_list = []
+    for instrument in instruments:
+        for data_type in data_types:
+            instrument = instrument.lower()
+            data_type = data_type.lower()
 
-    instrument_folder = None
-    
-    for foldername in listdir(data_folder):
-        if instrument in foldername.lower():
-            instrument_folder = path.join(data_folder, foldername)
-            break
-    
-    if instrument_folder is None:
-        return None
+            instrument_folder = None
+            
+            for foldername in listdir(data_folder):
+                if instrument in foldername.lower():
+                    instrument_folder = path.join(data_folder, foldername)
+                    break
+            
+            if instrument_folder is None:
+                continue
 
-    for data_type_folder in listdir(instrument_folder):
-        if data_type not in data_type_folder.lower():
-            continue
-        
-        data_type_folder_path = path.join(instrument_folder, data_type_folder)
+            for data_type_folder in listdir(instrument_folder):
+                if data_type not in data_type_folder.lower():
+                    continue
+                
+                data_type_folder_path = path.join(instrument_folder, data_type_folder)
 
-        file_path = listdir(data_type_folder_path)[0]
-        file_path = path.join(data_type_folder_path, file_path)
+                file_path = listdir(data_type_folder_path)[0]
+                file_path = path.join(data_type_folder_path, file_path)
 
-        df = pd.read_parquet(file_path)
-        return list(df.columns)
+                df = pd.read_parquet(file_path)
+                if not data_column_list:  # First iteration - use all columns
+                    data_column_list = list(df.columns)
+                else:  # Subsequent iterations - find intersection
+                    data_column_list = list(set(data_column_list) & set(df.columns))
 
-    return None
+    return data_column_list
 
 def get_target_data_by_instrument(instrument: str, data_type: str, data_column: str):
 

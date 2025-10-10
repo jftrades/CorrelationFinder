@@ -1,5 +1,6 @@
 
-import { useQuery } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -7,11 +8,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 import { Field, FieldLabel } from './components/ui/field';
-import { useState } from 'react';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 import * as d3 from 'd3';
+
 
 const instruments = {
   "btc": "Bitcoin",
@@ -33,7 +34,8 @@ const methods = {
   "linregress": "Lin Regression",
 }
 
-async function getAvailableDataColumns(instrument: string, datatype: string) {
+
+async function getAvailableDataColumns(instrument: string[], datatype: string[]) {
   const response = await fetch("http://localhost:8000/available-data-columns", {
     method: "POST",
     headers: {
@@ -48,36 +50,36 @@ async function getAvailableDataColumns(instrument: string, datatype: string) {
   return data.available_data_columns as string[];
 }
 
-// async function getAnalysedData(
-//   target_instrument: string,
-//   target_datatype: string,
-//   target_data_column: string,
-//   comparison_instruments: string[],
-//   comparison_datatypes: string[],
-//   comparison_data_columns: string[],
-//   methods: string[]
-// ) {
-//   const response = await fetch("http://localhost:8000/analysedData", {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify({
-//       target_instrument,
-//       target_datatype,
-//       target_data_column,
-//       comparison_instruments,
-//       comparison_datatypes,
-//       comparison_data_columns,
-//       methods
-//     }),
-//   });
-//   if (!response.ok) {
-//     throw new Error("Failed to fetch analysed data");
-//   }
-//   const data = await response.json();
-//   return data.analysed_data as any;
-// }
+async function getAnalysedData(
+  target_instrument: string,
+  target_datatype: string,
+  target_data_column: string,
+  comparison_instruments: string[],
+  comparison_datatypes: string[],
+  comparison_data_columns: string[],
+  methods: string[]
+) {
+  const response = await fetch("http://localhost:8000/analysedData", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      target_instrument,
+      target_datatype,
+      target_data_column,
+      comparison_instruments,
+      comparison_datatypes,
+      comparison_data_columns,
+      methods
+    }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch analysed data");
+  }
+  const data = await response.json();
+  return data as any;
+}
 
 export default function App() {
   const [targetInstrument, setTargetInstrument] = useState<string>("");
@@ -86,40 +88,91 @@ export default function App() {
 
   const [comparisonInstrument, setComparisonInstrument] = useState<string>("");
   const [comparisonDatatype, setComparisonDatatype] = useState<string>("");
-  const [comparisonDataColumn, setComparisonDataColumn] = useState<string>("");
+  const [comparisonDataColumn, setComparisonDataColumn] = useState<string>("")
 
   const [selectedMethods, setSelectedMethods] = useState<string[]>(Object.keys(methods));
 
   const { data: targetData, isLoading: targetIsLoading, error: targetError } = useQuery({
     queryKey: ["availableDataColumns", targetInstrument, targetDatatype],
-    queryFn: () => getAvailableDataColumns(targetInstrument, targetDatatype),
+    queryFn: () => getAvailableDataColumns([targetInstrument], [targetDatatype]),
     enabled: !!targetInstrument && !!targetDatatype,
     retry: false,
   })
   const { data: comparisonData, isLoading: comparisonIsLoading, error: comparisonError } = useQuery({
     queryKey: ["comparisonDataColumns", comparisonInstrument, comparisonDatatype],
-    queryFn: () => getAvailableDataColumns(comparisonInstrument, comparisonDatatype),
+    queryFn: () => getAvailableDataColumns([comparisonInstrument], [comparisonDatatype]),
     enabled: !!comparisonInstrument && !!comparisonDatatype,
     retry: false,
   });
 
-  // const { data: analysedData, isLoading: analysedIsLoading, error: analysedError } = useQuery({
-  //   queryKey: ["analysedData", targetDataColumn, comparisonDataColumn],
-  //   queryFn: () => getAnalysedData(
-  //     targetInstrument,
-  //     targetDatatype,
-  //     targetDataColumn,
-  //     comparisonInstrument,
-  //     comparisonDatatype,
-  //     comparisonDataColumn
-  //   )
-  //   enabled: !!targetDataColumn && !!comparisonDataColumn,
-  //   retry: false,
-  // });
+  const { data: analysedData, isLoading: analysedIsLoading, error: analysedError } = useQuery({
+    queryKey: ["analysedData", targetDataColumn, comparisonDataColumn],
+    queryFn: () => getAnalysedData(
+      targetInstrument,
+      targetDatatype,
+      targetDataColumn,
+      [comparisonInstrument],
+      [comparisonDatatype],
+      [comparisonDataColumn],
+      selectedMethods
+    ),
+    enabled: !!targetDataColumn && !!comparisonDataColumn,
+    retry: false,
+  });
+
+  console.log("analysedData", analysedData);
 
 
   let comparisonDataColumns = comparisonData ?? [];
   let availableDataColumns = targetData ?? [];
+
+  const renderRegion = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    if (!analysedData || !renderRegion) {
+      return;
+    }
+
+    const dataset = Object.entries(analysedData.comparison_column_contents[0]).map(([x, y]) => ({ x: +x, y: y }))
+
+    console.log(dataset)
+    const svg = d3.select(renderRegion.current);
+    svg.selectAll("*").remove(); // Clear previous render
+    
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 20, right: 30, bottom: 30, left: 40 };
+
+    const x = d3.scaleLinear()
+      .domain(d3.extent(dataset, d => d.x) as [number, number])
+      .range([margin.left, width - margin.right]);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(dataset, d => d.y) as number])
+      .nice()
+      .range([height - margin.bottom, margin.top]);
+
+    const line = d3.line<{x: number, y: number}>()
+      .x(d => x(d.x))
+      .y(d => y(d.y));
+
+    svg.append("path")
+      .datum(dataset)
+      .attr("fill", "none")
+      .attr("stroke", "steelblue")
+      .attr("stroke-width", 1.5)
+      .attr("d", line);
+
+    svg.append("g")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x));
+
+    svg.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y));
+
+
+  }, [analysedData, renderRegion])
 
 
   return (
@@ -209,7 +262,7 @@ export default function App() {
           <DropdownMenu>
             <DropdownMenuTrigger disabled={!targetDataColumn || !comparisonDataColumn} asChild>
               <Button variant="outline" className="col-span-3"> {/* button design */}
-                Choose Analysis Method: {selectedMethods.length === 0 ? " None" : selectedMethods.map((method) => methods[method]).join(", ")} {/* anonyme methode */}
+                Choose Analysis Method: {selectedMethods.length === 0 ? " None" : selectedMethods.map((method) => methods[method as keyof typeof methods]).join(", ")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -231,10 +284,10 @@ export default function App() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {/* <div>
-          <h2 className="text-2xl font-bold mb-4">Analysis Result</h2>
-            {JSON.stringify(analysedData)}
-        </div> */}
+        <div>
+          Analysis state: {analysedIsLoading ? "Loading..." : analysedError ? "Error loading analysed data" : analysedData ? "Data loaded" : "Idle"}
+        </div>
+        <svg ref={renderRegion} height="400" width="1000" />
       </main>
     </div>
   );
