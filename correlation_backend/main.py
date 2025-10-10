@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from correlation_backend.logic.calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis, theilslopes_analysis
 from fastapi.middleware.cors import CORSMiddleware
-from correlation_backend.logic.read_data import get_target_data_by_instrument, get_comparison_data_by_instrument
+from correlation_backend.logic.read_data import get_target_data_by_instrument, get_comparison_data_by_instrument, get_available_data_columns
 
 pearson_values = None
 
@@ -33,7 +33,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,6 +56,15 @@ class FindFilePath(BaseModel):
     comparison_data_columns: list[str]
 
     methods: list[str]
+
+
+class FindAvailableDataColumns(BaseModel):
+    instrument: str
+    datatype: str
+
+@app.post("/available-data-columns")
+async def find_available_data_columns(body: FindAvailableDataColumns):
+    return {"available_data_columns": get_available_data_columns(body.instrument, body.datatype)}
 
 @app.post("/filepath")
 async def analyze(request: FindFilePath):
