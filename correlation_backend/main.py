@@ -42,7 +42,7 @@ class FindAvailableDataColumns(BaseModel):
 async def find_available_data_columns(body: FindAvailableDataColumns):
     return {"available_data_columns": get_available_data_columns(body.instrument, body.datatype)}
 
-@app.post("/filepath")
+@app.post("/analysedData")
 async def analyze(request: FindFilePath):
     target_instrument = request.target_instrument
     target_data_type = request.target_datatype
@@ -63,7 +63,6 @@ async def analyze(request: FindFilePath):
         "spearman_results": [],
         "kendalltau_results": [],
         "linregress_results": [],
-        "theilslopes_results": []
     }
     
     for content in comparison_data:
@@ -79,9 +78,6 @@ async def analyze(request: FindFilePath):
         if "linregress" in methods:
             linregress_result = linregress_analysis(target_column_content, content)
             results["linregress_results"].append(linregress_result)
-        if "theilslopes" in methods:
-            theilslopes_result = theilslopes_analysis(target_column_content, content)
-            results["theilslopes_results"].append(theilslopes_result)
 
     return {
         "target_column_content": target_column_content, 
@@ -90,5 +86,4 @@ async def analyze(request: FindFilePath):
         "spearman_results": results["spearman_results"],
         "kendalltau_results": results["kendalltau_results"],
         "linregress_results": results["linregress_results"],
-        "theilslopes_results": results["theilslopes_results"]
         }
