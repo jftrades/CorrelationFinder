@@ -44,26 +44,25 @@ export default function App() {
   const [targetDatatype, setTargetDatatype] = useState<string>("");
   const [targetDataColumn, setTargetDataColumn] = useState<string>("");
 
-  const [comparisonInstruments, setComparisonInstruments] = useState<string[]>([]);
-  const [comparisonDatatypes, setComparisonDatatypes] = useState<string[]>([]);
-  const [comparisonDataColumns, setComparisonDataColumns] = useState<string[]>([]);
+  const [comparisonInstrument, setComparisonInstrument] = useState<string>("");
+  const [comparisonDatatype, setComparisonDatatype] = useState<string>("");
+  const [comparisonDataColumn, setComparisonDataColumn] = useState<string>("");
 
-  const { data, isLoading, error } = useQuery({
+  const { data: targetData, isLoading: targetIsLoading, error: targetError } = useQuery({
     queryKey: ["availableDataColumns", targetInstrument, targetDatatype],
     queryFn: () => getAvailableDataColumns(targetInstrument, targetDatatype),
     enabled: !!targetInstrument && !!targetDatatype,
     retry: false,
   })
+  const { data: comparisonData, isLoading: comparisonIsLoading, error: comparisonError } = useQuery({
+    queryKey: ["comparisonDataColumns", comparisonInstrument, comparisonDatatype],
+    queryFn: () => getAvailableDataColumns(comparisonInstrument, comparisonDatatype),
+    enabled: !!comparisonInstrument && !!comparisonDatatype,
+    retry: false,
+  });
 
-  let availableDataColumns = data ?? [];
-
-  function handleComparisonInstrumentClick(instrument: string) {
-    if (comparisonInstruments.includes(instrument)) {
-      setComparisonInstruments(comparisonInstruments.filter((i) => i !== instrument));
-    } else {
-      setComparisonInstruments([...comparisonInstruments, instrument]);
-    }
-  }
+  let comparisonDataColumns = comparisonData ?? [];
+  let availableDataColumns = targetData ?? [];
 
   return (
     <div className="flex justify-center p-8 min-h-screen w-full">
@@ -99,9 +98,9 @@ export default function App() {
           </Field>
           <Field>
             <FieldLabel>Target Data Column</FieldLabel>
-            <Select value={targetDataColumn} onValueChange={setTargetDataColumn} disabled={isLoading || !!error || availableDataColumns.length === 0}>
+            <Select value={targetDataColumn} onValueChange={setTargetDataColumn} disabled={targetIsLoading || !!targetError || availableDataColumns.length === 0}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={isLoading ? "Loading..." : !!error ? "Error loading data columns" : availableDataColumns.length === 0 ? "No data columns available" : "Select a target data column"} />
+                <SelectValue placeholder={targetIsLoading ? "Loading..." : !!targetError ? "Error loading data columns" : availableDataColumns.length === 0 ? "No data columns available" : "Select a target data column"} />
               </SelectTrigger>
               <SelectContent>
                 {availableDataColumns.map((column) => (
@@ -111,22 +110,43 @@ export default function App() {
             </Select>
           </Field>
           <Field>
-            <FieldLabel>Comparison Instruments</FieldLabel>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="font-normal">{comparisonInstruments.length > 0 ? comparisonInstruments.join(", ") : "Select comparison instruments"}</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
+            <FieldLabel>Comparison Instrument</FieldLabel>
+            <Select value={comparisonInstrument} onValueChange={setComparisonInstrument}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a comparison instrument" />
+              </SelectTrigger>
+              <SelectContent>
                 {Object.entries(instruments).map(([key, value]) => (
-                  <DropdownMenuCheckboxItem
-                    key={key}
-                    checked={comparisonInstruments.includes(key)}
-                    onClick={() => handleComparisonInstrumentClick(key)}>
-                    {value}
-                  </DropdownMenuCheckboxItem>
+                  <SelectItem key={key} value={key}>{value}</SelectItem>
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Comparison Datatype</FieldLabel>
+            <Select value={comparisonDatatype} onValueChange={setComparisonDatatype}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a comparison datatype" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(datatypes).map(([key, value]) => (
+                  <SelectItem key={key} value={key}>{value}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Comparison Data Column</FieldLabel>
+            <Select value={comparisonDataColumn} onValueChange={setComparisonDataColumn} disabled={comparisonIsLoading || !!comparisonError || comparisonDataColumns.length === 0}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={comparisonIsLoading ? "Loading..." : !!comparisonError ? "Error loading data columns" : comparisonDataColumns.length === 0 ? "No data columns available" : "Select a comparison data column"} />
+              </SelectTrigger>
+              <SelectContent>
+                {comparisonDataColumns.map((column) => (
+                  <SelectItem key={column} value={column}>{column}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
         </div>
       </main>
