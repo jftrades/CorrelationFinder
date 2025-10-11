@@ -126,6 +126,8 @@ export default function App() {
   let comparisonDataColumns = comparisonData ?? [];
   let availableDataColumns = targetData ?? [];
 
+// -------------------------------------------------------------------------------
+
   const renderRegion = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
@@ -133,22 +135,34 @@ export default function App() {
       return;
     }
 
-    const dataset = Object.entries(analysedData.comparison_column_contents[0]).map(([x, y]) => ({ x: +x, y: y }))
+    const targetDataset = Object.entries(analysedData.target_column_content).map(([x, y]) => ({ x: +x, y: +(y as number) }))
+    const comparisonDataset = Object.entries(analysedData.comparison_column_contents[0]).map(([x, y]) => ({ x: +x, y: +(y as number) }))
 
-    console.log(dataset)
+    // Min-max normalization
+    const normalize = (data: {x: number, y: number}[]) => {
+      const yValues = data.map(d => d.y);
+      const min = Math.min(...yValues);
+      const max = Math.max(...yValues);
+      return data.map(d => ({ x: d.x, y: (d.y - min) / (max - min) }));
+    };
+
+    const normalizedTarget = normalize(targetDataset);
+    const normalizedComparison = normalize(comparisonDataset);
+
     const svg = d3.select(renderRegion.current);
-    svg.selectAll("*").remove(); // Clear previous render
+    svg.selectAll("*").remove();
     
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const margin = { top: 20, right: 30, bottom: 30, left: 40 };
 
+    const allData = [...targetDataset, ...comparisonDataset];
     const x = d3.scaleLinear()
-      .domain(d3.extent(dataset, d => d.x) as [number, number])
+      .domain(d3.extent(allData, d => d.x) as [number, number])
       .range([margin.left, width - margin.right]);
 
     const y = d3.scaleLinear()
-      .domain([0, d3.max(dataset, d => d.y) as number])
+      .domain([0, 1])
       .nice()
       .range([height - margin.bottom, margin.top]);
 
@@ -156,24 +170,30 @@ export default function App() {
       .x(d => x(d.x))
       .y(d => y(d.y));
 
+    // Plot target data
     svg.append("path")
-      .datum(dataset)
+      .datum(normalizedTarget)
       .attr("fill", "none")
       .attr("stroke", "steelblue")
       .attr("stroke-width", 1.5)
       .attr("d", line);
 
+    // Plot comparison data
+    svg.append("path")
+      .datum(normalizedComparison)
+      .attr("fill", "none")
+      .attr("stroke", "purple")
+      .attr("stroke-width", 1.5)
+      .attr("d", line);
+
+    // Only x-axis
     svg.append("g")
       .attr("transform", `translate(0,${height - margin.bottom})`)
       .call(d3.axisBottom(x));
 
-    svg.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y));
-
-
   }, [analysedData, renderRegion])
 
+// -------------------------------------------------------------------------------
 
   return (
     <div className="flex justify-center p-8 min-h-screen w-full">
