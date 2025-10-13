@@ -1,39 +1,30 @@
-import pandas as pd
-from pandas import Series
-from scipy.stats import pearsonr, spearmanr, kendalltau, linregress, theilslopes
+from scipy.stats import pearsonr, spearmanr, kendalltau, linregress
+from correlation_backend.logic.json_utils import convert_analysis_result
 
-def pearson_analysis(target_column_content: Series, comparison_column_contents: Series):
-    data = pd.concat([target_column_content, comparison_column_contents], axis=1, join='inner').dropna()
-
+def pearson_analysis(target_series, comparison_series):
+    data = target_series.to_frame().join(comparison_series, how='inner').dropna()
     if len(data) < 2:
         return None, None
-    
-    corr_coef_pearson, p_value_pearson = pearsonr(data.iloc[:, 0], data.iloc[:, 1])
-    return corr_coef_pearson, p_value_pearson
+    result = pearsonr(data.iloc[:, 0], data.iloc[:, 1])
+    return convert_analysis_result(result)
 
-def spearman_analysis(target_column_content: Series, comparison_column_contents: Series):
-    data = pd.concat([target_column_content, comparison_column_contents], axis=1, join='inner').dropna()
-
+def spearman_analysis(target_series, comparison_series):
+    data = target_series.to_frame().join(comparison_series, how='inner').dropna()
     if len(data) < 2:
         return None, None
-    
-    corr_coef_spearman, p_value_spearman = spearmanr(data.iloc[:, 0], data.iloc[:, 1])
-    return corr_coef_spearman, p_value_spearman
+    result = spearmanr(data.iloc[:, 0], data.iloc[:, 1])
+    return convert_analysis_result(result)
 
-def kendalltau_analysis(target_column_content: Series, comparison_column_contents: Series):
-    data = pd.concat([target_column_content, comparison_column_contents], axis=1, join='inner').dropna()
-
+def kendalltau_analysis(target_series, comparison_series):
+    data = target_series.to_frame().join(comparison_series, how='inner').dropna()
     if len(data) < 2:
         return None, None
-    
-    corr_coef_kendall, p_value_kendall = kendalltau(data.iloc[:, 0], data.iloc[:, 1])
-    return corr_coef_kendall, p_value_kendall
+    result = kendalltau(data.iloc[:, 0], data.iloc[:, 1])
+    return convert_analysis_result(result)
 
-def linregress_analysis(target_column_content: Series, comparison_column_contents: Series):
-    data = pd.concat([target_column_content, comparison_column_contents], axis=1, join='inner').dropna()
-
+def linregress_analysis(target_series, comparison_series):
+    data = target_series.to_frame().join(comparison_series, how='inner').dropna()
     if len(data) < 2:
         return None, None, None, None, None
-    
     regress = linregress(data.iloc[:, 0], data.iloc[:, 1])
-    return regress.slope, regress.intercept, regress.rvalue, regress.pvalue, regress.stderr
+    return convert_analysis_result((regress.slope, regress.intercept, regress.rvalue, regress.pvalue, regress.stderr))

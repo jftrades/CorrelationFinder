@@ -46,19 +46,51 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
   const renderRegion = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
-    if (!analysedData || !renderRegion.current) {
+    console.log("TimeSeriesChart data:", {
+      hasData: !!analysedData,
+      hasTarget: !!analysedData?.target_column_content,
+      targetLength: analysedData?.target_column_content?.length,
+      hasComparison: !!analysedData?.comparison_column_contents?.[0],
+      comparisonLength: analysedData?.comparison_column_contents?.[0]?.length
+    });
+    
+    if (!analysedData || !renderRegion.current || !analysedData.target_column_content || !analysedData.comparison_column_contents?.[0]) {
+      console.log("TimeSeriesChart: Missing data, skipping render");
       return;
     }
 
-    const targetDataset = Object.entries(analysedData.target_column_content).map(([x, y]) => ({ x: +x, y: +(y as number) }));
-    const comparisonDataset = Object.entries(analysedData.comparison_column_contents[0]).map(([x, y]) => ({ x: +x, y: +(y as number) }));
+    const downsample = (data: any[], maxPoints: number = 1000) => {
+      if (data.length <= maxPoints) return data;
+      const step = Math.ceil(data.length / maxPoints);
+      return data.filter((_, i) => i % step === 0);
+    };
 
-    // Min-max normalization
+    const targetRaw = analysedData.target_column_content
+      .filter((item: any) => item && item.value !== null && item.value !== undefined)
+      .map((item: any) => ({ x: item.timestamp, y: item.value }));
+    
+    const comparisonRaw = analysedData.comparison_column_contents[0]
+      .filter((item: any) => item && item.value !== null && item.value !== undefined)
+      .map((item: any) => ({ x: item.timestamp, y: item.value }));
+
+    console.log("TimeSeriesChart filtered:", { targetRaw: targetRaw.length, comparisonRaw: comparisonRaw.length });
+
+    if (targetRaw.length === 0 || comparisonRaw.length === 0) {
+      console.log("TimeSeriesChart: No data after filtering");
+      return;
+    }
+
+    const targetDataset = downsample(targetRaw);
+    const comparisonDataset = downsample(comparisonRaw);
+    
+    console.log("TimeSeriesChart rendering with:", { target: targetDataset.length, comparison: comparisonDataset.length });
+
     const normalize = (data: DataPoint[]) => {
       const yValues = data.map(d => d.y);
       const min = Math.min(...yValues);
       const max = Math.max(...yValues);
-      return data.map(d => ({ x: d.x, y: (d.y - min) / (max - min) }));
+      const range = max - min || 1;
+      return data.map(d => ({ x: d.x, y: (d.y - min) / range }));
     };
 
     const normalizedTarget = normalize(targetDataset);
@@ -85,7 +117,6 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
       .x(d => x(d.x))
       .y(d => y(d.y));
 
-    // Plot target data
     svg.append("path")
       .datum(normalizedTarget)
       .attr("fill", "none")
@@ -93,7 +124,6 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
       .attr("stroke-width", 1.5)
       .attr("d", line);
 
-    // Plot comparison data
     svg.append("path")
       .datum(normalizedComparison)
       .attr("fill", "none")
@@ -101,7 +131,6 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
       .attr("stroke-width", 1.5)
       .attr("d", line);
 
-    // Only x-axis
     svg.append("g")
       .attr("transform", `translate(0,${svgHeight - margin.bottom})`)
       .call(d3.axisBottom(x));
@@ -118,18 +147,18 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
     if (!analysedData || !barChartRef.current) return;
 
     const correlationData = selectedMethods
-      .filter(method => method !== 'linregress') // Exclude linregress from correlation chart
+      .filter(method => method !== 'linregress')
       .map(method => {
         let value;
         switch(method) {
           case 'pearson':
-            value = analysedData?.pearson_results?.[0]?.[0]; // First element of tuple is correlation
+            value = analysedData?.pearson_results?.[0]?.[0];
             break;
           case 'spearman':
-            value = analysedData?.spearman_results?.[0]?.[0]; // First element of tuple is correlation
+            value = analysedData?.spearman_results?.[0]?.[0];
             break;
           case 'kendalltau':
-            value = analysedData?.kendalltau_results?.[0]?.[0]; // First element of tuple is correlation
+            value = analysedData?.kendalltau_results?.[0]?.[0];
             break;
           default:
             value = undefined;
@@ -139,7 +168,7 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
       .filter(d => d.value !== undefined && d.value !== null);
 
     const data = correlationData;
-    if (data.length === 0) return; // Don't render if no data
+    if (data.length === 0) return;
 
     const svg = d3.select(barChartRef.current);
     svg.selectAll("*").remove();
@@ -157,7 +186,6 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
       .range([margin.top, svgHeight - margin.bottom])
       .padding(0.1);
 
-    // Center line at 0
     svg.append("line")
       .attr("x1", x(0))
       .attr("x2", x(0))
@@ -166,7 +194,6 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
       .attr("stroke", "#000")
       .attr("stroke-width", 1);
 
-    // Bars
     svg.selectAll("rect")
       .data(data)
       .enter()
@@ -177,7 +204,6 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
       .attr("height", y.bandwidth())
       .attr("fill", d => d.value >= 0 ? "steelblue" : "crimson");
 
-    // Value labels
     svg.selectAll("text.value")
       .data(data)
       .enter()
@@ -191,7 +217,6 @@ export function CorrelationChart({ analysedData, selectedMethods, width = 500, h
       .attr("fill", "#333")
       .text(d => d.value.toFixed(3));
 
-    // Axes
     svg.append("g")
       .attr("transform", `translate(0,${svgHeight - margin.bottom})`)
       .call(d3.axisBottom(x));
@@ -212,9 +237,9 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
     if (!analysedData || !regressionChartRef.current) return;
 
     const RegressCorrData = selectedMethods
-      .filter(method => method === 'linregress') // Only linregress for regression chart
+      .filter(method => method === 'linregress')
       .map(method => {
-        const result = analysedData?.linregress_results?.[0]; // Assuming single comparison
+        const result = analysedData?.linregress_results?.[0];
         if (result) {
           return {
             method: methods[method as keyof typeof methods],
@@ -231,24 +256,46 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
 
     if (RegressCorrData.length === 0) return;
 
-    const regressionData = RegressCorrData[0]; // Single regression result
+    const regressionData = RegressCorrData[0];
     const svg = d3.select(regressionChartRef.current);
     svg.selectAll("*").remove();
 
     const svgWidth = width;
     const svgHeight = height;
     const margin = { top: 30, right: 20, bottom: 120, left: 40 };
-    const scatterHeight = svgHeight - margin.bottom - margin.top; // More bottom margin for stats
+    const scatterHeight = svgHeight - margin.bottom - margin.top;
 
-    // Prepare data for scatter plot
-    const scatterData = Object.entries(analysedData.target_column_content).map(([x, y]) => ({
-      x: +(y as number),
-      y: +(analysedData.comparison_column_contents[0][x] as number)
-    }));
+    const targetTimeSeries = analysedData.target_column_content;
+    const comparisonTimeSeries = analysedData.comparison_column_contents[0];
 
-    // Create scales
-    const xExtent = d3.extent(scatterData, d => d.x) as [number, number];
-    const yExtent = d3.extent(scatterData, d => d.y) as [number, number];
+    if (!targetTimeSeries || !comparisonTimeSeries) return;
+
+    const timestampMap = new Map();
+    comparisonTimeSeries.forEach((item: any) => {
+      if (item && item.value !== null && item.value !== undefined) {
+        timestampMap.set(item.timestamp, item.value);
+      }
+    });
+
+    const scatterDataRaw = targetTimeSeries
+      .filter((item: any) => item && item.value !== null && item.value !== undefined && timestampMap.has(item.timestamp))
+      .map((item: any) => ({
+        x: item.value,
+        y: timestampMap.get(item.timestamp)
+      }));
+
+    if (scatterDataRaw.length === 0) return;
+
+    const downsample = (data: DataPoint[], maxPoints: number = 500) => {
+      if (data.length <= maxPoints) return data;
+      const step = Math.ceil(data.length / maxPoints);
+      return data.filter((_, i) => i % step === 0);
+    };
+
+    const scatterData = downsample(scatterDataRaw);
+
+    const xExtent = d3.extent(scatterData, (d: DataPoint) => d.x) as [number, number];
+    const yExtent = d3.extent(scatterData, (d: DataPoint) => d.y) as [number, number];
 
     const xScale = d3.scaleLinear()
       .domain(xExtent)
@@ -258,18 +305,16 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
       .domain(yExtent)
       .range([margin.top + scatterHeight, margin.top]);
 
-    // Draw scatter points
     svg.selectAll("circle")
-      .data(scatterData)
+      .data<DataPoint>(scatterData)
       .enter()
       .append("circle")
       .attr("cx", d => xScale(d.x))
       .attr("cy", d => yScale(d.y))
-      .attr("r", 3)
+      .attr("r", 2)
       .attr("fill", "#333")
-      .attr("opacity", 0.7);
+      .attr("opacity", 0.5);
 
-    // Draw regression line
     const slope = regressionData.slope;
     const intercept = regressionData.intercept;
     
@@ -289,7 +334,6 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
       .attr("stroke-width", 2)
       .attr("d", line);
 
-    // Add axes
     svg.append("g")
       .attr("transform", `translate(0,${margin.top + scatterHeight})`)
       .call(d3.axisBottom(xScale));
@@ -298,7 +342,6 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
       .attr("transform", `translate(${margin.left},0)`)
       .call(d3.axisLeft(yScale));
 
-    // Add statistics below the chart
     const statsY = margin.top + scatterHeight + 50;
     const stats = [
       { label: "Slope:", value: regressionData.slope.toFixed(4) },
@@ -309,14 +352,12 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
       { label: "Std Error:", value: regressionData.stderr.toFixed(6) }
     ];
 
-    // Display stats in two columns
     stats.forEach((stat, i) => {
       const col = Math.floor(i / 3);
       const row = i % 3;
       const x = 20 + col * 200;
       const y = statsY + row * 20;
       
-      // Label
       svg.append("text")
         .attr("x", x)
         .attr("y", y)
@@ -324,7 +365,6 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
         .attr("font-weight", "bold")
         .text(stat.label);
       
-      // Value
       svg.append("text")
         .attr("x", x + 70)
         .attr("y", y)
@@ -332,7 +372,6 @@ export function RegressionChart({ analysedData, selectedMethods, width = 500, he
         .text(stat.value);
     });
 
-    // Add equation
     const equation = `y = ${regressionData.slope.toFixed(4)}x + ${regressionData.intercept.toFixed(4)}`;
     svg.append("text")
       .attr("x", svgWidth / 2)
