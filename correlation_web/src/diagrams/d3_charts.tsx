@@ -46,16 +46,7 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
   const renderRegion = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
-    console.log("TimeSeriesChart data:", {
-      hasData: !!analysedData,
-      hasTarget: !!analysedData?.target_column_content,
-      targetLength: analysedData?.target_column_content?.length,
-      hasComparison: !!analysedData?.comparison_column_contents?.[0],
-      comparisonLength: analysedData?.comparison_column_contents?.[0]?.length
-    });
-    
     if (!analysedData || !renderRegion.current || !analysedData.target_column_content || !analysedData.comparison_column_contents?.[0]) {
-      console.log("TimeSeriesChart: Missing data, skipping render");
       return;
     }
 
@@ -73,17 +64,12 @@ export function TimeSeriesChart({ analysedData, width = 1000, height = 200 }: Ti
       .filter((item: any) => item && item.value !== null && item.value !== undefined)
       .map((item: any) => ({ x: item.timestamp, y: item.value }));
 
-    console.log("TimeSeriesChart filtered:", { targetRaw: targetRaw.length, comparisonRaw: comparisonRaw.length });
-
     if (targetRaw.length === 0 || comparisonRaw.length === 0) {
-      console.log("TimeSeriesChart: No data after filtering");
       return;
     }
 
     const targetDataset = downsample(targetRaw);
     const comparisonDataset = downsample(comparisonRaw);
-    
-    console.log("TimeSeriesChart rendering with:", { target: targetDataset.length, comparison: comparisonDataset.length });
 
     const normalize = (data: DataPoint[]) => {
       const yValues = data.map(d => d.y);

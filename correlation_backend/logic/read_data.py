@@ -11,24 +11,10 @@ def decode_binary_column(series):
             return None
         if isinstance(val, (int, float)):
             return float(val)
-        if isinstance(val, bytes):
-            try:
-                # Try to unpack as int64 (8 bytes)
-                if len(val) == 8:
-                    return float(struct.unpack('<q', val)[0])
-                # Try to unpack as double (8 bytes)
-                elif len(val) == 8:
-                    return struct.unpack('<d', val)[0]
-                # Try to decode as string then to float
-                else:
-                    return float(val.decode('utf-8'))
-            except Exception:
-                return None
+        if isinstance(val, bytes) and len(val) == 8:
+            return float(struct.unpack('<q', val)[0])
         if isinstance(val, str):
-            try:
-                return float(val)
-            except Exception:
-                return None
+            return float(val)
         return None
     
     return series.apply(decode_value)
@@ -80,12 +66,7 @@ def get_target_data_by_instrument(instrument: str, data_type: str, data_column: 
                     exact_folder_path = os.path.join(folder_path, subfolder)
 
                     filename = os.listdir(exact_folder_path)[0]
-
                     df = pd.read_parquet(os.path.join(exact_folder_path, filename))
-                    
-                    print(f"DEBUG - Available columns: {list(df.columns)}")
-                    print(f"DEBUG - DataFrame shape: {df.shape}")
-                    print(f"DEBUG - First few rows:\n{df.head()}")
                     
                     if 'ts_event' in df.columns:
                         df = df.set_index('ts_event')
@@ -96,25 +77,15 @@ def get_target_data_by_instrument(instrument: str, data_type: str, data_column: 
                     
                     if data_column in df.columns:
                         series = df[data_column]
-                        print(f"DEBUG - Column '{data_column}' dtype: {series.dtype}")
-                        print(f"DEBUG - Column '{data_column}' sample values: {series.head()}")
-                        print(f"DEBUG - Column '{data_column}' non-null before conversion: {series.notna().sum()}")
                         
-                        # Handle binary byte strings
                         if series.dtype == 'object':
-                            # Check if values are bytes
                             first_non_null = series.dropna().iloc[0] if len(series.dropna()) > 0 else None
                             if isinstance(first_non_null, bytes):
-                                print("DEBUG - Detected binary data, decoding...")
                                 series = decode_binary_column(series)
-                                print(f"DEBUG - After decoding, sample values: {series.head()}")
                             else:
                                 series = pd.to_numeric(series, errors='coerce')
                         
-                        print(f"Target column '{data_column}' - Before dropna: {len(series)}, non-null: {series.notna().sum()}")
                         series = series.dropna()
-                        print(f"Target column '{data_column}' - After dropna: {len(series)}")
-                        
                         series.name = 'target'
                         return series
 
@@ -133,7 +104,6 @@ def get_comparison_data_by_instrument(
         for data_type in comparison_datatypes:
             instrument = instrument.lower()
             data_type = data_type.lower()
-            print(instrument)
 
             for foldername in os.listdir(data_folder):
                 if instrument not in foldername.lower():
@@ -145,9 +115,7 @@ def get_comparison_data_by_instrument(
                         continue
 
                     exact_folder_path = os.path.join(folder_path, subfolder)
-                    print(exact_folder_path)
                     filename = os.listdir(exact_folder_path)[0]
-
                     df = pd.read_parquet(os.path.join(exact_folder_path, filename))
                     
                     if 'ts_event' in df.columns:
@@ -160,13 +128,14 @@ def get_comparison_data_by_instrument(
                     for data_column in df.columns:
                         if data_column in comparison_data_columns:
                             series = df[data_column]
-                            # Handle binary byte strings
+                            
                             if series.dtype == 'object':
                                 first_non_null = series.dropna().iloc[0] if len(series.dropna()) > 0 else None
                                 if isinstance(first_non_null, bytes):
                                     series = decode_binary_column(series)
                                 else:
                                     series = pd.to_numeric(series, errors='coerce')
+                            
                             series = series.dropna()
                             series.name = 'comparison'
                             results.append(series)

@@ -101,12 +101,6 @@ async def analyze(request: FindFilePath):
         target_json = series_to_timeseries_array(target_column_content)
         comparison_json = [series_to_timeseries_array(s) for s in comparison_data]
         
-        print(f"JSON Arrays - Target: {len(target_json)} points, Comparison: {len(comparison_json[0])} points")
-        if len(target_json) > 0:
-            print(f"Sample target: {target_json[0]}")
-        if len(comparison_json[0]) > 0:
-            print(f"Sample comparison: {comparison_json[0][0]}")
-        
         response_data = {
             "target_column_content": target_json, 
             "comparison_column_contents": comparison_json,
