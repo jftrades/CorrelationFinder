@@ -8,9 +8,10 @@ from correlation_backend.logic.read_data import (
     get_comparison_data_by_instrument, 
     get_available_data_columns,
     get_available_instruments,
-    get_available_datatypes
+    get_available_datatypes,
+    get_timestamp_range_for_datatype
 )
-from correlation_backend.logic.json_utils import series_to_timeseries_array
+from correlation_backend.logic.json_utils import series_to_timeseries_array, nanoseconds_to_datetime
 import json
 import numpy as np
 
@@ -36,10 +37,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# @app.get("/files")
-# async def get_files():
-#     return {"files": list(dfs.keys())}
-
 @app.get("/analysismethods")
 async def get_analysis_methods():
     return {"analysis_methods": ["pearson", "spearman", "kendalltau"]}
@@ -55,16 +52,32 @@ class GetDatatypesRequest(BaseModel):
 async def get_datatypes(body: GetDatatypesRequest):
     return {"datatypes": get_available_datatypes(body.instrument)}
 
+class GetTimestampRangeRequest(BaseModel):
+    instrument: str
+    datatype: str
+
+@app.post("/timestamp-range")
+async def get_timestamp_range(body: GetTimestampRangeRequest):
+    timestamp_range = get_timestamp_range_for_datatype(body.instrument, body.datatype)
+    if timestamp_range:
+        timestamp_range['min_datetime'] = nanoseconds_to_datetime(timestamp_range['min_timestamp'])
+        timestamp_range['max_datetime'] = nanoseconds_to_datetime(timestamp_range['max_timestamp'])
+        return timestamp_range
+    else:
+        return {"error": "No timestamp data found for the specified instrument and datatype"}
+
 class FindFilePath(BaseModel):
     target_instrument: str 
     target_datatype: str
     target_data_column: str
-
     comparison_instruments: list[str]
     comparison_datatypes: list[str]
     comparison_data_columns: list[str]
-
     methods: list[str]
+    start_month: str
+    start_year: str
+    end_month: str
+    end_year: str
 
 
 class FindAvailableDataColumns(BaseModel):
@@ -78,53 +91,48 @@ async def find_available_data_columns(body: FindAvailableDataColumns):
 @app.post("/analysedData")
 async def analyze(request: FindFilePath):
     try:
-        target_instrument = request.target_instrument
-        target_data_type = request.target_datatype
-        target_data_column = request.target_data_column
+        from datetime import datetime
         
-        comparison_instruments = request.comparison_instruments
-        comparison_data_types = request.comparison_datatypes
-        comparison_data_columns = request.comparison_data_columns
-        
-        methods = request.methods
+        start_ts = int(datetime(int(request.start_year), int(request.start_month), 1).timestamp() * 1_000_000_000)
+        end_year = int(request.end_year)
+        end_month = int(request.end_month)
+        next_month = end_month + 1 if end_month < 12 else 1
+        next_year = end_year if end_month < 12 else end_year + 1
+        end_ts = int(datetime(next_year, next_month, 1).timestamp() * 1_000_000_000)
 
-        target_column_content = get_target_data_by_instrument(target_instrument, target_data_type, target_data_column)
-        comparison_data = get_comparison_data_by_instrument(comparison_instruments, comparison_data_types, comparison_data_columns)
+        target_column_content = get_target_data_by_instrument(
+            request.target_instrument, 
+            request.target_datatype, 
+            request.target_data_column
+        )
+        comparison_data = get_comparison_data_by_instrument(
+            request.comparison_instruments, 
+            request.comparison_datatypes, 
+            request.comparison_data_columns
+        )
         
         if target_column_content is None or len(comparison_data) == 0:
             return {"error": "No data found for the selected instruments/columns"}
 
-        results = {
-            "pearson_results": [],
-            "spearman_results": [],
-            "kendalltau_results": [],
-            "linregress_results": [],
-        }
+        target_column_content = target_column_content[(target_column_content.index >= start_ts) & (target_column_content.index < end_ts)]
+        comparison_data = [s[(s.index >= start_ts) & (s.index < end_ts)] for s in comparison_data]
+
+        results = {"pearson_results": [], "spearman_results": [], "kendalltau_results": [], "linregress_results": []}
         
         for content in comparison_data:
-            if "pearson" in methods:
-                pearson_result = pearson_analysis(target_column_content, content)
-                results["pearson_results"].append(pearson_result)
-            if "spearman" in methods:
-                spearman_result = spearman_analysis(target_column_content, content)
-                results["spearman_results"].append(spearman_result)
-            if "kendalltau" in methods:
-                kendalltau_result = kendalltau_analysis(target_column_content, content)
-                results["kendalltau_results"].append(kendalltau_result)
-            if "linregress" in methods:
-                linregress_result = linregress_analysis(target_column_content, content)
-                results["linregress_results"].append(linregress_result)
-        
-        target_json = series_to_timeseries_array(target_column_content)
-        comparison_json = [series_to_timeseries_array(s) for s in comparison_data]
+            if "pearson" in request.methods:
+                results["pearson_results"].append(pearson_analysis(target_column_content, content))
+            if "spearman" in request.methods:
+                results["spearman_results"].append(spearman_analysis(target_column_content, content))
+            if "kendalltau" in request.methods:
+                results["kendalltau_results"].append(kendalltau_analysis(target_column_content, content))
+            if "linregress" in request.methods:
+                results["linregress_results"].append(linregress_analysis(target_column_content, content))
         
         response_data = {
-            "target_column_content": target_json, 
-            "comparison_column_contents": comparison_json,
-            "pearson_results": results["pearson_results"],
-            "spearman_results": results["spearman_results"],
-            "kendalltau_results": results["kendalltau_results"],
-            "linregress_results": results["linregress_results"],
+            "target_column_content": series_to_timeseries_array(target_column_content), 
+            "comparison_column_contents": [series_to_timeseries_array(s) for s in comparison_data],
+            **results
         }
         
         return JSONResponse(content=json.loads(json.dumps(response_data, cls=NumpyEncoder)))

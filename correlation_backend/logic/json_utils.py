@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 
 def series_to_timeseries_array(series: pd.Series):
@@ -27,5 +28,14 @@ def convert_analysis_result(result):
         return None
     try:
         return tuple(None if (pd.isna(v) or (isinstance(v, float) and (np.isnan(v) or np.isinf(v)))) else float(v) for v in result)
+    except Exception:
+        return None
+
+
+def nanoseconds_to_datetime(timestamp_ns: int) -> str:
+    try:
+        timestamp_seconds = timestamp_ns / 1_000_000_000
+        dt = datetime.fromtimestamp(timestamp_seconds)
+        return dt.isoformat()
     except Exception:
         return None

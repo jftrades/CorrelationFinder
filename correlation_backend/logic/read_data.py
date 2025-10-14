@@ -75,14 +75,13 @@ def get_available_data_columns(instruments: list[str], data_types: list[str]):
                     continue
                 
                 data_type_folder_path = path.join(instrument_folder, data_type_folder)
-
                 file_path = listdir(data_type_folder_path)[0]
                 file_path = path.join(data_type_folder_path, file_path)
-
                 df = pd.read_parquet(file_path)
-                if not data_column_list:  # First iteration - use all columns
+                
+                if not data_column_list:
                     data_column_list = list(df.columns)
-                else:  # Subsequent iterations - find intersection
+                else:
                     data_column_list = list(set(data_column_list) & set(df.columns))
 
     return data_column_list
@@ -175,3 +174,37 @@ def get_comparison_data_by_instrument(
                             results.append(series)
 
     return results
+
+
+def get_timestamp_range_for_datatype(instrument: str, data_type: str):
+    instrument = instrument.lower()
+    data_type = data_type.lower()
+
+    for foldername in os.listdir(data_folder):
+        if instrument not in foldername.lower():
+            continue
+
+        folder_path = os.path.join(data_folder, foldername)
+        for subfolder in os.listdir(folder_path):
+            if data_type not in subfolder.lower():
+                continue
+
+            exact_folder_path = os.path.join(folder_path, subfolder)
+            filename = os.listdir(exact_folder_path)[0]
+            df = pd.read_parquet(os.path.join(exact_folder_path, filename))
+            
+            timestamp_col = None
+            if 'ts_event' in df.columns:
+                timestamp_col = 'ts_event'
+            elif 'ts_init' in df.columns:
+                timestamp_col = 'ts_init'
+            elif 'timestamp' in df.columns:
+                timestamp_col = 'timestamp'
+            
+            if timestamp_col:
+                return {
+                    'min_timestamp': int(df[timestamp_col].min()),
+                    'max_timestamp': int(df[timestamp_col].max())
+                }
+    
+    return None

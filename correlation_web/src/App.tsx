@@ -45,6 +45,21 @@ async function getAvailableDatatypes(instrument: string) {
   return data.datatypes as string[];
 }
 
+async function getTimestampRange(instrument: string, datatype: string) {
+  const response = await fetch("http://localhost:8000/timestamp-range", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ instrument, datatype }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch timestamp range");
+  }
+  const data = await response.json();
+  return data as { min_timestamp: number; max_timestamp: number; min_datetime: string; max_datetime: string };
+}
+
 async function getAvailableDataColumns(instrument: string[], datatype: string[]) {
   const response = await fetch("http://localhost:8000/available-data-columns", {
     method: "POST",
@@ -67,7 +82,11 @@ async function getAnalysedData(
   comparison_instruments: string[],
   comparison_datatypes: string[],
   comparison_data_columns: string[],
-  methods: string[]
+  methods: string[],
+  start_month: string,
+  start_year: string,
+  end_month: string,
+  end_year: string
 ) {
   const response = await fetch("http://localhost:8000/analysedData", {
     method: "POST",
@@ -81,7 +100,11 @@ async function getAnalysedData(
       comparison_instruments,
       comparison_datatypes,
       comparison_data_columns,
-      methods
+      methods,
+      start_month,
+      start_year,
+      end_month,
+      end_year
     }),
   });
   if (!response.ok) {
@@ -101,6 +124,15 @@ export default function App() {
   const [comparisonDataColumn, setComparisonDataColumn] = useState<string>("")
 
   const [selectedMethods, setSelectedMethods] = useState<string[]>(Object.keys(methods));
+
+  // Date range state - using month/year instead of full dates
+  const [startMonth, setStartMonth] = useState<string>("");
+  const [startYear, setStartYear] = useState<string>("");
+  const [endMonth, setEndMonth] = useState<string>("");
+  const [endYear, setEndYear] = useState<string>("");
+  
+  // State to control when to actually run the analysis
+  const [shouldRunAnalysis, setShouldRunAnalysis] = useState(false);
 
   const { data: availableInstruments, isLoading: instrumentsLoading } = useQuery({
     queryKey: ["availableInstruments"],
@@ -122,6 +154,22 @@ export default function App() {
     retry: false,
   });
 
+  // Fetch timestamp ranges for target
+  const { data: targetTimestampRange } = useQuery({
+    queryKey: ["targetTimestampRange", targetInstrument, targetDatatype],
+    queryFn: () => getTimestampRange(targetInstrument, targetDatatype),
+    enabled: !!targetInstrument && !!targetDatatype,
+    retry: false,
+  });
+
+  // Fetch timestamp ranges for comparison
+  const { data: comparisonTimestampRange } = useQuery({
+    queryKey: ["comparisonTimestampRange", comparisonInstrument, comparisonDatatype],
+    queryFn: () => getTimestampRange(comparisonInstrument, comparisonDatatype),
+    enabled: !!comparisonInstrument && !!comparisonDatatype,
+    retry: false,
+  });
+
   const { data: targetData, isLoading: targetIsLoading, error: targetError } = useQuery({
     queryKey: ["availableDataColumns", targetInstrument, targetDatatype],
     queryFn: () => getAvailableDataColumns([targetInstrument], [targetDatatype]),
@@ -135,8 +183,8 @@ export default function App() {
     retry: false,
   });
 
-  const { data: analysedData, isLoading: analysedIsLoading, error: analysedError } = useQuery({
-    queryKey: ["analysedData", targetDataColumn, comparisonDataColumn, selectedMethods],
+  const { data: analysedData } = useQuery({
+    queryKey: ["analysedData", targetDataColumn, comparisonDataColumn, selectedMethods, shouldRunAnalysis, startMonth, startYear, endMonth, endYear],
     queryFn: () => getAnalysedData(
       targetInstrument,
       targetDatatype,
@@ -144,9 +192,13 @@ export default function App() {
       [comparisonInstrument],
       [comparisonDatatype],
       [comparisonDataColumn],
-      selectedMethods
+      selectedMethods,
+      startMonth,
+      startYear,
+      endMonth,
+      endYear
     ),
-    enabled: !!targetDataColumn && !!comparisonDataColumn,
+    enabled: shouldRunAnalysis && !!targetDataColumn && !!comparisonDataColumn && !!startMonth && !!startYear && !!endMonth && !!endYear,
     retry: false,
   });
 
@@ -259,16 +311,16 @@ export default function App() {
           </Field>
           <DropdownMenu>
             <DropdownMenuTrigger disabled={!targetDataColumn || !comparisonDataColumn} asChild>
-              <Button variant="outline" className="col-span-3"> {/* button design */}
+              <Button variant="outline" className="col-span-3">
                 Choose Analysis Method: {selectedMethods.length === 0 ? " None" : selectedMethods.map((method) => methods[method as keyof typeof methods]).join(", ")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              {Object.entries(methods).map(([key, value]) => (   /* die Liste aller Einträge wird hier gemappt */
+              {Object.entries(methods).map(([key, value]) => (
                 <DropdownMenuCheckboxItem
-                  key={key} /* key prop also Parameter der Komponenten (DropdownMenuCheckboxItem ist eine Komponente)*/
-                  checked={selectedMethods.includes(key)}  /* props immer in geschweiften Klammern */
-                  onCheckedChange={(checked) => { /* prop allgemein heisst: Daten die von übergeordneten Komponenten an untergeordnete Komponenten weitergegeben werden */
+                  key={key}
+                  checked={selectedMethods.includes(key)}
+                  onCheckedChange={(checked) => {
                     if (checked) {
                       setSelectedMethods([...selectedMethods, key]);
                     } else {
@@ -282,15 +334,143 @@ export default function App() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div>
-          Analysis state: {analysedIsLoading ? "Loading..." : analysedError ? "Error loading analysed data" : analysedData ? "Data loaded" : "Idle"}
+        
+        {/* Display available date range info */}
+        {(targetTimestampRange || comparisonTimestampRange) && (
+          <div className="text-sm text-muted-foreground space-y-1">
+            {targetTimestampRange && (
+              <div>
+                Target: {new Date(targetTimestampRange.min_timestamp / 1_000_000).toLocaleDateString()} - {new Date(targetTimestampRange.max_timestamp / 1_000_000).toLocaleDateString()}
+              </div>
+            )}
+            {comparisonTimestampRange && (
+              <div>
+                Comparison: {new Date(comparisonTimestampRange.min_timestamp / 1_000_000).toLocaleDateString()} - {new Date(comparisonTimestampRange.max_timestamp / 1_000_000).toLocaleDateString()}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Start Date Selection */}
+        <div className="grid grid-cols-2 gap-6 w-full">
+          <Field>
+            <FieldLabel>Start Month</FieldLabel>
+            <Select 
+              value={startMonth} 
+              onValueChange={setStartMonth}
+              disabled={!targetTimestampRange && !comparisonTimestampRange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="01">January</SelectItem>
+                <SelectItem value="02">February</SelectItem>
+                <SelectItem value="03">March</SelectItem>
+                <SelectItem value="04">April</SelectItem>
+                <SelectItem value="05">May</SelectItem>
+                <SelectItem value="06">June</SelectItem>
+                <SelectItem value="07">July</SelectItem>
+                <SelectItem value="08">August</SelectItem>
+                <SelectItem value="09">September</SelectItem>
+                <SelectItem value="10">October</SelectItem>
+                <SelectItem value="11">November</SelectItem>
+                <SelectItem value="12">December</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Start Year</FieldLabel>
+            <Select 
+              value={startYear} 
+              onValueChange={setStartYear}
+              disabled={!targetTimestampRange && !comparisonTimestampRange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select year" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const year = 2015 + i; // 2015 to 2026
+                  return <SelectItem key={year} value={year.toString()}>{year}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
         </div>
-        <h2 className="text-2xl font-bold">Correlation Results</h2>
-        <TimeSeriesChart analysedData={analysedData} width={1000} height={200} />
-        <div className="flex gap-4">
-          <CorrelationChart analysedData={analysedData} selectedMethods={selectedMethods} width={500} height={300} />
-          <RegressionChart analysedData={analysedData} selectedMethods={selectedMethods} width={500} height={300} />
+        
+        {/* End Date Selection */}
+        <div className="grid grid-cols-2 gap-6 w-full">
+          <Field>
+            <FieldLabel>End Month</FieldLabel>
+            <Select 
+              value={endMonth} 
+              onValueChange={setEndMonth}
+              disabled={!targetTimestampRange && !comparisonTimestampRange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="01">January</SelectItem>
+                <SelectItem value="02">February</SelectItem>
+                <SelectItem value="03">March</SelectItem>
+                <SelectItem value="04">April</SelectItem>
+                <SelectItem value="05">May</SelectItem>
+                <SelectItem value="06">June</SelectItem>
+                <SelectItem value="07">July</SelectItem>
+                <SelectItem value="08">August</SelectItem>
+                <SelectItem value="09">September</SelectItem>
+                <SelectItem value="10">October</SelectItem>
+                <SelectItem value="11">November</SelectItem>
+                <SelectItem value="12">December</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>End Year</FieldLabel>
+            <Select 
+              value={endYear} 
+              onValueChange={setEndYear}
+              disabled={!targetTimestampRange && !comparisonTimestampRange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select year" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const year = 2015 + i; // 2015 to 2026
+                  return <SelectItem key={year} value={year.toString()}>{year}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
         </div>
+        
+        {/* Start CorrelationFinder Button */}
+        <div className="w-full">
+          <Button 
+            variant="default" 
+            size="lg"
+            className="w-full"
+            onClick={() => setShouldRunAnalysis(true)}
+            disabled={!targetDataColumn || !comparisonDataColumn || !startMonth || !startYear || !endMonth || !endYear}
+          >
+            Start CorrelationFinder
+          </Button>
+        </div>
+        
+        {/* Results Section - Only show when analysis is complete */}
+        {shouldRunAnalysis && analysedData && (
+          <>
+            <h2 className="text-2xl font-bold">Correlation Results</h2>
+            <TimeSeriesChart analysedData={analysedData} width={1000} height={200} />
+            <div className="flex gap-4">
+              <CorrelationChart analysedData={analysedData} selectedMethods={selectedMethods} width={500} height={300} />
+              <RegressionChart analysedData={analysedData} selectedMethods={selectedMethods} width={500} height={300} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
