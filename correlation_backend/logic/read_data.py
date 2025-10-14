@@ -5,6 +5,40 @@ import struct
 
 data_folder = "data"
 
+def get_available_instruments():
+    instruments = []
+    if not os.path.exists(data_folder):
+        return instruments
+    
+    for foldername in listdir(data_folder):
+        folder_path = path.join(data_folder, foldername)
+        if os.path.isdir(folder_path):
+            instruments.append(foldername)
+    
+    return sorted(instruments)
+
+def get_available_datatypes(instrument: str):
+    datatypes = []
+    if not instrument:
+        return datatypes
+    
+    instrument_folder = None
+    
+    for foldername in listdir(data_folder):
+        if instrument == foldername or instrument.lower() == foldername.lower():
+            instrument_folder = path.join(data_folder, foldername)
+            break
+    
+    if instrument_folder is None or not os.path.exists(instrument_folder):
+        return datatypes
+    
+    for subfolder in listdir(instrument_folder):
+        subfolder_path = path.join(instrument_folder, subfolder)
+        if os.path.isdir(subfolder_path):
+            datatypes.append(subfolder)
+    
+    return sorted(datatypes)
+
 def decode_binary_column(series):
     def decode_value(val):
         if pd.isna(val):

@@ -3,7 +3,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from correlation_backend.logic.calc_analysis import pearson_analysis, spearman_analysis, kendalltau_analysis, linregress_analysis
 from fastapi.middleware.cors import CORSMiddleware
-from correlation_backend.logic.read_data import get_target_data_by_instrument, get_comparison_data_by_instrument, get_available_data_columns
+from correlation_backend.logic.read_data import (
+    get_target_data_by_instrument, 
+    get_comparison_data_by_instrument, 
+    get_available_data_columns,
+    get_available_instruments,
+    get_available_datatypes
+)
 from correlation_backend.logic.json_utils import series_to_timeseries_array
 import json
 import numpy as np
@@ -37,6 +43,17 @@ app.add_middleware(
 @app.get("/analysismethods")
 async def get_analysis_methods():
     return {"analysis_methods": ["pearson", "spearman", "kendalltau"]}
+
+@app.get("/available-instruments")
+async def get_instruments():
+    return {"instruments": get_available_instruments()}
+
+class GetDatatypesRequest(BaseModel):
+    instrument: str
+
+@app.post("/available-datatypes")
+async def get_datatypes(body: GetDatatypesRequest):
+    return {"datatypes": get_available_datatypes(body.instrument)}
 
 class FindFilePath(BaseModel):
     target_instrument: str 

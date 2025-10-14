@@ -14,19 +14,6 @@ import { Field, FieldLabel } from './components/ui/field';
 import { TimeSeriesChart, CorrelationChart, RegressionChart } from './diagrams/d3_charts';
 
 
-const instruments = {
-  "btc": "Bitcoin",
-  "eth": "Ethereum",
-  "sol": "Solana",
-  "fng": "Fear and Greed Index",
-};
-
-const datatypes = {
-  "lunar": "Lunar Crush",
-  "metrics": "Binance Venue Metrics",
-  "last-external": "Bar Data",
-}
-
 const methods = {
   "pearson": "Pearson",
   "spearman": "Spearman",
@@ -34,6 +21,29 @@ const methods = {
   "linregress": "Lin Regression",
 }
 
+async function getAvailableInstruments() {
+  const response = await fetch("http://localhost:8000/available-instruments");
+  if (!response.ok) {
+    throw new Error("Failed to fetch available instruments");
+  }
+  const data = await response.json();
+  return data.instruments as string[];
+}
+
+async function getAvailableDatatypes(instrument: string) {
+  const response = await fetch("http://localhost:8000/available-datatypes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ instrument }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch available datatypes");
+  }
+  const data = await response.json();
+  return data.datatypes as string[];
+}
 
 async function getAvailableDataColumns(instrument: string[], datatype: string[]) {
   const response = await fetch("http://localhost:8000/available-data-columns", {
@@ -92,6 +102,26 @@ export default function App() {
 
   const [selectedMethods, setSelectedMethods] = useState<string[]>(Object.keys(methods));
 
+  const { data: availableInstruments, isLoading: instrumentsLoading } = useQuery({
+    queryKey: ["availableInstruments"],
+    queryFn: getAvailableInstruments,
+    retry: false,
+  });
+
+  const { data: targetDatatypes, isLoading: targetDatatypesLoading } = useQuery({
+    queryKey: ["targetDatatypes", targetInstrument],
+    queryFn: () => getAvailableDatatypes(targetInstrument),
+    enabled: !!targetInstrument,
+    retry: false,
+  });
+
+  const { data: comparisonDatatypes, isLoading: comparisonDatatypesLoading } = useQuery({
+    queryKey: ["comparisonDatatypes", comparisonInstrument],
+    queryFn: () => getAvailableDatatypes(comparisonInstrument),
+    enabled: !!comparisonInstrument,
+    retry: false,
+  });
+
   const { data: targetData, isLoading: targetIsLoading, error: targetError } = useQuery({
     queryKey: ["availableDataColumns", targetInstrument, targetDatatype],
     queryFn: () => getAvailableDataColumns([targetInstrument], [targetDatatype]),
@@ -125,6 +155,9 @@ export default function App() {
 
   let comparisonDataColumns = comparisonData ?? [];
   let availableDataColumns = targetData ?? [];
+  let instruments = availableInstruments ?? [];
+  let targetDatatypesList = targetDatatypes ?? [];
+  let comparisonDatatypesList = comparisonDatatypes ?? [];
 
   return (
     <div className="flex justify-center p-8 min-h-screen w-full">
@@ -134,26 +167,33 @@ export default function App() {
         <div className="grid grid-cols-3 gap-6 w-full">
           <Field>
             <FieldLabel>Target Instrument</FieldLabel>
-            <Select value={targetInstrument} onValueChange={setTargetInstrument}>
+            <Select value={targetInstrument} onValueChange={(value) => {
+              setTargetInstrument(value);
+              setTargetDatatype("");
+              setTargetDataColumn("");
+            }}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a target instrument" />
+                <SelectValue placeholder={instrumentsLoading ? "Loading..." : "Select a target instrument"} />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(instruments).map(([key, value]) => (
-                  <SelectItem key={key} value={key}>{value}</SelectItem>
+                {instruments.map((instrument) => (
+                  <SelectItem key={instrument} value={instrument}>{instrument}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
           <Field>
             <FieldLabel>Target Datatype</FieldLabel>
-            <Select value={targetDatatype} onValueChange={setTargetDatatype}>
+            <Select value={targetDatatype} onValueChange={(value) => {
+              setTargetDatatype(value);
+              setTargetDataColumn("");
+            }} disabled={!targetInstrument || targetDatatypesLoading}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a target datatype" />
+                <SelectValue placeholder={!targetInstrument ? "Select instrument first" : targetDatatypesLoading ? "Loading..." : "Select a target datatype"} />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(datatypes).map(([key, value]) => (
-                  <SelectItem key={key} value={key}>{value}</SelectItem>
+                {targetDatatypesList.map((datatype) => (
+                  <SelectItem key={datatype} value={datatype}>{datatype}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -173,26 +213,33 @@ export default function App() {
           </Field>
           <Field>
             <FieldLabel>Comparison Instrument</FieldLabel>
-            <Select value={comparisonInstrument} onValueChange={setComparisonInstrument}>
+            <Select value={comparisonInstrument} onValueChange={(value) => {
+              setComparisonInstrument(value);
+              setComparisonDatatype("");
+              setComparisonDataColumn("");
+            }}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a comparison instrument" />
+                <SelectValue placeholder={instrumentsLoading ? "Loading..." : "Select a comparison instrument"} />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(instruments).map(([key, value]) => (
-                  <SelectItem key={key} value={key}>{value}</SelectItem>
+                {instruments.map((instrument) => (
+                  <SelectItem key={instrument} value={instrument}>{instrument}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
           <Field>
             <FieldLabel>Comparison Datatype</FieldLabel>
-            <Select value={comparisonDatatype} onValueChange={setComparisonDatatype}>
+            <Select value={comparisonDatatype} onValueChange={(value) => {
+              setComparisonDatatype(value);
+              setComparisonDataColumn("");
+            }} disabled={!comparisonInstrument || comparisonDatatypesLoading}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a comparison datatype" />
+                <SelectValue placeholder={!comparisonInstrument ? "Select instrument first" : comparisonDatatypesLoading ? "Loading..." : "Select a comparison datatype"} />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(datatypes).map(([key, value]) => (
-                  <SelectItem key={key} value={key}>{value}</SelectItem>
+                {comparisonDatatypesList.map((datatype) => (
+                  <SelectItem key={datatype} value={datatype}>{datatype}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
