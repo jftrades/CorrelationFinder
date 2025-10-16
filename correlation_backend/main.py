@@ -9,7 +9,8 @@ from correlation_backend.logic.read_data import (
     get_available_data_columns,
     get_available_instruments,
     get_available_datatypes,
-    get_timestamp_range_for_datatype
+    get_timestamp_range_for_datatype,
+    align_series_with_offset
 )
 from correlation_backend.logic.json_utils import series_to_timeseries_array, nanoseconds_to_datetime
 import json
@@ -78,6 +79,7 @@ class FindFilePath(BaseModel):
     start_year: str
     end_month: str
     end_year: str
+    offset: int = 0
 
 
 class FindAvailableDataColumns(BaseModel):
@@ -120,14 +122,23 @@ async def analyze(request: FindFilePath):
         results = {"pearson_results": [], "spearman_results": [], "kendalltau_results": [], "linregress_results": []}
         
         for content in comparison_data:
+            aligned_target, aligned_comparison = align_series_with_offset(target_column_content, content, request.offset)
+            
+            if aligned_target is None or aligned_comparison is None or len(aligned_target) == 0 or len(aligned_comparison) == 0:
+                results["pearson_results"].append((None, None))
+                results["spearman_results"].append((None, None))
+                results["kendalltau_results"].append((None, None))
+                results["linregress_results"].append((None, None, None, None, None))
+                continue
+            
             if "pearson" in request.methods:
-                results["pearson_results"].append(pearson_analysis(target_column_content, content))
+                results["pearson_results"].append(pearson_analysis(aligned_target, aligned_comparison))
             if "spearman" in request.methods:
-                results["spearman_results"].append(spearman_analysis(target_column_content, content))
+                results["spearman_results"].append(spearman_analysis(aligned_target, aligned_comparison))
             if "kendalltau" in request.methods:
-                results["kendalltau_results"].append(kendalltau_analysis(target_column_content, content))
+                results["kendalltau_results"].append(kendalltau_analysis(aligned_target, aligned_comparison))
             if "linregress" in request.methods:
-                results["linregress_results"].append(linregress_analysis(target_column_content, content))
+                results["linregress_results"].append(linregress_analysis(aligned_target, aligned_comparison))
         
         response_data = {
             "target_column_content": series_to_timeseries_array(target_column_content), 

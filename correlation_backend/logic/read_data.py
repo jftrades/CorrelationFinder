@@ -2,6 +2,7 @@ import os
 from os import path, listdir
 import pandas as pd
 import struct
+import numpy as np
 
 data_folder = "data"
 
@@ -208,3 +209,84 @@ def get_timestamp_range_for_datatype(instrument: str, data_type: str):
                 }
     
     return None
+
+
+def detect_timeframe(series):
+    if series is None or len(series) < 2:
+        return None
+    
+    timestamps = sorted(series.index.tolist())
+    diffs = []
+    for i in range(min(100, len(timestamps) - 1)):
+        diffs.append(timestamps[i + 1] - timestamps[i])
+    
+    if not diffs:
+        return None
+    
+    median_diff = pd.Series(diffs).median()
+    return int(median_diff)
+
+
+def align_series_with_offset(target_series, comparison_series, offset=0):
+    if target_series is None or comparison_series is None:
+        return None, None
+    
+    if len(target_series) == 0 or len(comparison_series) == 0:
+        return target_series, comparison_series
+    
+    if offset == 0:
+        common_index = target_series.index.intersection(comparison_series.index)
+        if len(common_index) == 0:
+            return target_series, comparison_series
+        
+        target_aligned = target_series.loc[common_index].dropna()
+        comparison_aligned = comparison_series.loc[common_index].dropna()
+        
+        final_index = target_aligned.index.intersection(comparison_aligned.index)
+        return target_aligned.loc[final_index], comparison_aligned.loc[final_index]
+    
+    target_timestamps = sorted(target_series.index.tolist())
+    comparison_timestamps = sorted(comparison_series.index.tolist())
+    
+    target_dict = target_series.to_dict()
+    comparison_dict = comparison_series.to_dict()
+    
+    aligned_target_data = []
+    aligned_comparison_data = []
+    aligned_indices = []
+    
+    import bisect
+    
+    for target_ts in target_timestamps:
+        target_val = target_dict.get(target_ts)
+        if target_val is None or pd.isna(target_val):
+            continue
+        
+        if offset > 0:
+            pos = bisect.bisect_right(comparison_timestamps, target_ts)
+            if pos + offset - 1 < len(comparison_timestamps):
+                comp_ts = comparison_timestamps[pos + offset - 1]
+            else:
+                continue
+        else:
+            pos = bisect.bisect_left(comparison_timestamps, target_ts)
+            if pos + offset >= 0:
+                comp_ts = comparison_timestamps[pos + offset]
+            else:
+                continue
+        
+        comp_val = comparison_dict.get(comp_ts)
+        if comp_val is None or pd.isna(comp_val):
+            continue
+        
+        aligned_target_data.append(target_val)
+        aligned_comparison_data.append(comp_val)
+        aligned_indices.append(target_ts)
+    
+    if not aligned_target_data:
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+    
+    target_aligned = pd.Series(data=aligned_target_data, index=aligned_indices, name='target')
+    comparison_aligned = pd.Series(data=aligned_comparison_data, index=aligned_indices, name='comparison')
+    
+    return target_aligned, comparison_aligned

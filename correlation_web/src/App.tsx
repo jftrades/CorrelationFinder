@@ -86,7 +86,8 @@ async function getAnalysedData(
   start_month: string,
   start_year: string,
   end_month: string,
-  end_year: string
+  end_year: string,
+  offset: number
 ) {
   const response = await fetch("http://localhost:8000/analysedData", {
     method: "POST",
@@ -104,7 +105,8 @@ async function getAnalysedData(
       start_month,
       start_year,
       end_month,
-      end_year
+      end_year,
+      offset
     }),
   });
   if (!response.ok) {
@@ -125,13 +127,13 @@ export default function App() {
 
   const [selectedMethods, setSelectedMethods] = useState<string[]>(Object.keys(methods));
 
-  // Date range state - using month/year instead of full dates
   const [startMonth, setStartMonth] = useState<string>("");
   const [startYear, setStartYear] = useState<string>("");
   const [endMonth, setEndMonth] = useState<string>("");
   const [endYear, setEndYear] = useState<string>("");
   
-  // State to control when to actually run the analysis
+  const [offset, setOffset] = useState<number>(0);
+  
   const [shouldRunAnalysis, setShouldRunAnalysis] = useState(false);
 
   const { data: availableInstruments, isLoading: instrumentsLoading } = useQuery({
@@ -184,7 +186,7 @@ export default function App() {
   });
 
   const { data: analysedData } = useQuery({
-    queryKey: ["analysedData", targetDataColumn, comparisonDataColumn, selectedMethods, shouldRunAnalysis, startMonth, startYear, endMonth, endYear],
+    queryKey: ["analysedData", targetDataColumn, comparisonDataColumn, selectedMethods, shouldRunAnalysis, startMonth, startYear, endMonth, endYear, offset],
     queryFn: () => getAnalysedData(
       targetInstrument,
       targetDatatype,
@@ -196,7 +198,8 @@ export default function App() {
       startMonth,
       startYear,
       endMonth,
-      endYear
+      endYear,
+      offset
     ),
     enabled: shouldRunAnalysis && !!targetDataColumn && !!comparisonDataColumn && !!startMonth && !!startYear && !!endMonth && !!endYear,
     retry: false,
@@ -351,8 +354,8 @@ export default function App() {
           </div>
         )}
         
-        {/* Start Date Selection */}
-        <div className="grid grid-cols-2 gap-6 w-full">
+        {/* Date Range Selection */}
+        <div className="grid grid-cols-4 gap-6 w-full">
           <Field>
             <FieldLabel>Start Month</FieldLabel>
             <Select 
@@ -397,10 +400,6 @@ export default function App() {
               </SelectContent>
             </Select>
           </Field>
-        </div>
-        
-        {/* End Date Selection */}
-        <div className="grid grid-cols-2 gap-6 w-full">
           <Field>
             <FieldLabel>End Month</FieldLabel>
             <Select 
@@ -447,7 +446,27 @@ export default function App() {
           </Field>
         </div>
         
-        {/* Start CorrelationFinder Button */}
+        <div className="flex items-center gap-4 w-full">
+          <span className="text-sm font-medium">Choose Offset (affects Comp. Data)</span>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setOffset(offset - 1)}
+            disabled={!targetTimestampRange && !comparisonTimestampRange}
+          >
+            -
+          </Button>
+          <span className="text-sm font-medium min-w-[3rem] text-center">{offset}</span>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setOffset(offset + 1)}
+            disabled={!targetTimestampRange && !comparisonTimestampRange}
+          >
+            +
+          </Button>
+        </div>
+        
         <div className="w-full">
           <Button 
             variant="default" 
@@ -456,7 +475,7 @@ export default function App() {
             onClick={() => setShouldRunAnalysis(true)}
             disabled={!targetDataColumn || !comparisonDataColumn || !startMonth || !startYear || !endMonth || !endYear}
           >
-            Start CorrelationFinder
+            Start CorrelationFinder{offset !== 0 ? ` (${offset > 0 ? '+' : ''}${offset} Offset)` : ''}
           </Button>
         </div>
         
